@@ -1,4 +1,3 @@
-import sqlite3 from "sqlite3";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,21 +9,37 @@ const __dirname = path.dirname(__filename);
 const DATABASE_URL = process.env.DATABASE_URL;
 
 let pgPool: pg.Pool | null = null;
-let sqliteDb: sqlite3.Database | null = null;
+let sqliteDb: any = null;
 
-const dataDir = path.join(__dirname, "..", "data");
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+if (DATABASE_URL && (DATABASE_URL.startsWith("postgres://") || DATABASE_URL.startsWith("postgresql://"))) {
+  console.log("🐘 Connecting to PostgreSQL database...");
+  const useSsl = process.env.NODE_ENV === "production" || !DATABASE_URL.includes("localhost");
+  pgPool = new pg.Pool({
+    connectionString: DATABASE_URL,
+    ssl: useSsl ? { rejectUnauthorized: false } : false
+  });
+} else {
+  console.log("📁 SQLite mode active for local development (no PostgreSQL DATABASE_URL detected).");
 }
 
-const sqlitePath = path.join(dataDir, "planner.db");
-
-if (DATABASE_URL && DATABASE_URL.startsWith("postgres")) {
-  console.log("🐘 Connecting to PostgreSQL database...");
-  pgPool = new pg.Pool({ connectionString: DATABASE_URL });
-} else {
-  console.log(`📁 Connecting to SQLite database at ${sqlitePath}...`);
-  sqliteDb = new sqlite3.Database(sqlitePath);
+async function getSqliteDb(): Promise<any> {
+  if (!sqliteDb) {
+    const dataDir = path.join(__dirname, "..", "data");
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const sqlitePath = path.join(dataDir, "planner.db");
+    console.log(`📁 Loading SQLite database at ${sqlitePath}...`);
+    try {
+      const sqlite3Module = await import("sqlite3");
+      const sqlite3 = sqlite3Module.default || sqlite3Module;
+      sqliteDb = new sqlite3.Database(sqlitePath);
+    } catch (err) {
+      console.error("Failed to load sqlite3 native module for local SQLite development:", err);
+      throw new Error("SQLite module could not be loaded. Please set DATABASE_URL for PostgreSQL or install sqlite3.");
+    }
+  }
+  return sqliteDb;
 }
 
 // Database Helper Interface
@@ -37,8 +52,9 @@ export const db = {
       const res = await pgPool.query(pgSql, params);
       return { lastID: res.rows[0]?.id || 0, changes: res.rowCount || 0 };
     } else {
+      const sDb = await getSqliteDb();
       return new Promise((resolve, reject) => {
-        sqliteDb!.run(sql, params, function (err) {
+        sDb.run(sql, params, function (this: any, err: any) {
           if (err) reject(err);
           else resolve({ lastID: this.lastID, changes: this.changes });
         });
@@ -54,8 +70,9 @@ export const db = {
       const res = await pgPool.query(pgSql, params);
       return res.rows[0] as T;
     } else {
+      const sDb = await getSqliteDb();
       return new Promise((resolve, reject) => {
-        sqliteDb!.get(sql, params, (err, row) => {
+        sDb.get(sql, params, (err: any, row: any) => {
           if (err) reject(err);
           else resolve(row as T);
         });
@@ -71,8 +88,9 @@ export const db = {
       const res = await pgPool.query(pgSql, params);
       return res.rows as T[];
     } else {
+      const sDb = await getSqliteDb();
       return new Promise((resolve, reject) => {
-        sqliteDb!.all(sql, params, (err, rows) => {
+        sDb.all(sql, params, (err: any, rows: any[]) => {
           if (err) reject(err);
           else resolve(rows as T[]);
         });

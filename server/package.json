@@ -16,9 +16,11 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
-    "sqlite3": "^6.0.1",
     "uuid": "^14.0.2",
     "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
