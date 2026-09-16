@@ -11,7 +11,10 @@ type Message = {
   content: string;
 };
 
-const PROXY_URL = import.meta.env.VITE_PROXY_SERVER_URL || "http://localhost:5000";
+const PROXY_URL =
+  import.meta.env.VITE_PROXY_SERVER_URL ||
+  (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "") : "") ||
+  "http://localhost:5000";
 
 const CareerChatbot = () => {
   const [messages, setMessages] = useState<Message[]>([
